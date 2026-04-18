@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Power NI",
+        "description": "Set up Power NI to pull live tariff prices from {url}. No configuration needed — prices refresh every hour."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Power NI integration is needed."
+    }
+  }
+}
