@@ -65,6 +65,65 @@ class TestKeypadEconomy7:
         assert parsed["keypad_economy_7"]["standing_charge"] == 12.55
 
 
+class TestRobustness:
+    """Verify the parser never raises — it always returns a complete dict with float-or-None
+    values regardless of what the page contains. HA marks sensors unavailable when
+    native_value is None, so None is always safe; an exception is not."""
+
+    def test_empty_string_does_not_raise(self):
+        data = power_ni_parser.parse_page("")
+        assert isinstance(data, dict)
+
+    def test_malformed_html_does_not_raise(self):
+        data = power_ni_parser.parse_page("<html><div><p><<broken>>")
+        assert isinstance(data, dict)
+
+    def test_truncated_html_does_not_raise(self):
+        from tests.fixtures import MOCK_HTML
+        data = power_ni_parser.parse_page(MOCK_HTML[:200])
+        assert isinstance(data, dict)
+
+    def test_section_present_but_no_table(self):
+        html = '<html><body><div id="bill-pay"><h3>Bill Pay</h3><p>no table here</p></div></body></html>'
+        data = power_ni_parser.parse_page(html)
+        assert isinstance(data, dict)
+        for value in data["bill_pay"].values():
+            assert value is None
+
+    def test_garbled_price_text_returns_none_not_exception(self):
+        html = """<html><body>
+        <div id="bill-pay"><h3>Bill Pay</h3>
+        <table class="tbl-rates unit-rates"><tbody>
+          <tr class="pink-outline">
+            <td>Best Deal</td><td>-</td>
+            <td class="center">TBC</td><td class="center">TBC</td>
+          </tr>
+        </tbody></table></div></body></html>"""
+        data = power_ni_parser.parse_page(html)
+        assert isinstance(data, dict)
+        assert data["bill_pay"]["unit_rate"] is None
+
+    def test_return_value_always_contains_all_tariff_keys(self):
+        data = power_ni_parser.parse_page("")
+        import const as power_ni_const
+        assert set(data.keys()) == set(power_ni_const.TARIFFS.keys())
+
+    def test_return_value_always_contains_all_rate_keys(self):
+        data = power_ni_parser.parse_page("")
+        import const as power_ni_const
+        for tariff_key, cfg in power_ni_const.TARIFFS.items():
+            assert set(data[tariff_key].keys()) == set(cfg["rates"])
+
+    def test_all_values_are_float_or_none(self):
+        from tests.fixtures import MOCK_HTML
+        data = power_ni_parser.parse_page(MOCK_HTML)
+        for tariff_key, rates in data.items():
+            for rate_key, value in rates.items():
+                assert value is None or isinstance(value, float), (
+                    f"{tariff_key}.{rate_key} = {value!r} is neither float nor None"
+                )
+
+
 class TestMissingSection:
     def test_missing_section_returns_none_values(self):
         data = power_ni_parser.parse_page("<html><body>No tariffs here</body></html>")
